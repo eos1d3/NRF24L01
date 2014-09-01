@@ -30,6 +30,12 @@ NRF_RESULT NRF_SetupGPIO(NRF24L01* dev) {
 
 NRF_RESULT NRF_Init(NRF24L01* dev) {
 
+	NRF_SetupGPIO(dev);
+
+	NRF_PowerUp(dev,1);
+	NRF_RXTXControl(dev,NRF_STATE_RX);
+
+
 	return NRF_OK;
 }
 
@@ -88,16 +94,16 @@ NRF_RESULT NRF_WriteRegister(NRF24L01* dev, uint8_t reg, uint8_t* data) {
 }
 
 NRF_RESULT NRF_ReadRXPayload(NRF24L01* dev,uint8_t* data){
-	uint8_t tx[dev->payload];
-	if(NRF_SendCommand(dev,NRF_CMD_R_RX_PAYLOAD,tx,data,dev->payload)!=NRF_OK){
+	uint8_t tx[dev->PayloadLength];
+	if(NRF_SendCommand(dev,NRF_CMD_R_RX_PAYLOAD,tx,data,dev->PayloadLength)!=NRF_OK){
 		return NRF_ERROR;
 	}
 	return NRF_OK;
 }
 
 NRF_RESULT NRF_WriteTXPayload(NRF24L01* dev,uint8_t* data){
-	uint8_t rx[dev->payload];
-	if(NRF_SendCommand(dev,NRF_CMD_W_TX_PAYLOAD,data,rx,dev->payload)!=NRF_OK){
+	uint8_t rx[dev->PayloadLength];
+	if(NRF_SendCommand(dev,NRF_CMD_W_TX_PAYLOAD,data,rx,dev->PayloadLength)!=NRF_OK){
 		return NRF_ERROR;
 	}
 	return NRF_OK;
@@ -332,7 +338,7 @@ NRF_RESULT NRF_PowerUp(NRF24L01* dev,uint8_t powerUp){
 	return NRF_OK;
 }
 
-NRF_RESULT NRF_RXTXControl(NRF24L01* dev,uint8_t rx){
+NRF_RESULT NRF_RXTXControl(NRF24L01* dev,NRF_TXRX_STATE rx){
 	uint8_t reg=0;
 	if(NRF_ReadRegister(dev,NRF_CONFIG,&reg)!=NRF_OK){
 		return NRF_ERROR;

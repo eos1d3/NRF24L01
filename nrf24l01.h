@@ -76,15 +76,20 @@ typedef enum{
 	NRF_CRC_WIDTH_2B=1
 } NRF_CRC_WIDTH;
 
+typedef enum{
+	NRF_STATE_RX=1,
+	NRF_STATE_TX=0
+} NRF_TXRX_STATE;
+
 typedef struct{
 	SPI_HandleTypeDef* spi;
-	NRF_DATA_RATE 	data_rate;
-	uint8_t			rf_ch;
-	uint8_t			payload;
-	uint8_t			retransmittions;
-	uint8_t			retransmitDelay;
-	NRF_TX_PWR		pwr;
-	uint8_t*		rx_address;
+	NRF_DATA_RATE 	DATA_RATE;
+	uint8_t			RF_CHANNEL;
+	uint8_t			PayloadLength;
+	uint8_t			RetransmitCount;
+	uint8_t			RetransmitDelay;
+	NRF_TX_PWR		TX_POWER;
+	uint8_t*		RX_ADDRESS;
 
 	GPIO_TypeDef*	NRF_CSN_GPIOx;	// CSN pin
 	uint16_t		NRF_CSN_GPIO_PIN;
@@ -98,7 +103,7 @@ typedef struct{
 	uint8_t			NRF_IRQ_preempt_priority;
 	uint8_t			NRF_IRQ_sub_priority;
 
-	uint8_t			PTX_Flag;
+	NRF_TXRX_STATE	STATE;
 
 } NRF24L01;
 
@@ -158,7 +163,7 @@ NRF_RESULT NRF_EnableAutoAcknowledgement(NRF24L01* dev,uint8_t pipe);
 NRF_RESULT NRF_EnableCRC(NRF24L01* dev,uint8_t activate);
 NRF_RESULT NRF_SetCRCWidth(NRF24L01* dev,NRF_CRC_WIDTH width);
 NRF_RESULT NRF_PowerUp(NRF24L01* dev,uint8_t powerUp);
-NRF_RESULT NRF_RXTXControl(NRF24L01* dev,uint8_t rx);
+NRF_RESULT NRF_RXTXControl(NRF24L01* dev,NRF_TXRX_STATE rx);
 NRF_RESULT NRF_EnableRXDataReadyIRQ(NRF24L01* dev,uint8_t activate);
 NRF_RESULT NRF_EnableTXDataSentIRQ(NRF24L01* dev,uint8_t activate);
 NRF_RESULT NRF_EnableMaxRetransmitIRQ(NRF24L01* dev,uint8_t activate);
