@@ -3,11 +3,6 @@
 
 #include "stm32f4xx_hal.h"
 
-#define NRF_CS_ENABLE()		HAL_GPIO_WritePin(dev->NRF_CSN_GPIOx,dev->NRF_CSN_GPIO_PIN,GPIO_PIN_RESET)
-#define NRF_CS_DISABLE()	HAL_GPIO_WritePin(dev->NRF_CSN_GPIOx,dev->NRF_CSN_GPIO_PIN,GPIO_PIN_SET)
-#define NRF_CE_ENABLE()		HAL_GPIO_WritePin(dev->NRF_CE_GPIOx,dev->NRF_CE_GPIO_PIN,GPIO_PIN_RESET)
-#define NRF_CE_DISABLE()	HAL_GPIO_WritePin(dev->NRF_CE_GPIOx,dev->NRF_CE_GPIO_PIN,GPIO_PIN_SET)
-
 /* Registers */
 #define NRF_CONFIG		0x00
 #define NRF_EN_AA		0x01
@@ -50,7 +45,7 @@
 #define NRF_CMD_W_TX_PAYLOAD_NOACK	0xB0
 #define NRF_CMD_NOP					0xFF
 
-#define NRF_SPI_TIMEOUT	1000
+#define NRF_SPI_TIMEOUT	100000
 
 typedef enum{
 	NRF_DATA_RATE_250KBPS=1,
@@ -90,6 +85,13 @@ typedef struct{
 	uint8_t			RetransmitDelay;
 	NRF_TX_PWR		TX_POWER;
 	uint8_t*		RX_ADDRESS;
+	uint8_t*		TX_ADDRESS;
+	NRF_CRC_WIDTH	CRC_WIDTH;
+	NRF_ADDR_WIDTH	ADDR_WIDTH;
+	NRF_TXRX_STATE	STATE;
+
+	uint8_t*		RX_BUFFER;
+	uint8_t*		TX_BUFFER;
 
 	GPIO_TypeDef*	NRF_CSN_GPIOx;	// CSN pin
 	uint16_t		NRF_CSN_GPIO_PIN;
@@ -102,8 +104,6 @@ typedef struct{
 	IRQn_Type		NRF_IRQn;
 	uint8_t			NRF_IRQ_preempt_priority;
 	uint8_t			NRF_IRQ_sub_priority;
-
-	NRF_TXRX_STATE	STATE;
 
 } NRF24L01;
 
@@ -119,14 +119,15 @@ NRF_RESULT NRF_Init(NRF24L01* dev);
 /* EXTI Interrupt Handler */
 void NRF_IRQ_Handler(NRF24L01* dev);
 
-
+/* Data Sending / Receiving FXs */
+NRF_RESULT NRF_SendPacket(NRF24L01* dev,uint8_t* data);
 
 
 
 
 
 /* LOW LEVEL STUFF (you don't have to look in here...)*/
-
+NRF_RESULT NRF_SendCommand(NRF24L01* dev, uint8_t cmd, uint8_t* tx,uint8_t* rx,uint8_t len);
 /* CMD */
 NRF_RESULT NRF_ReadRegister(NRF24L01* dev,uint8_t reg, uint8_t* data);
 NRF_RESULT NRF_WriteRegister(NRF24L01* dev,uint8_t reg, uint8_t* data);
