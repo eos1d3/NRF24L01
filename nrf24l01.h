@@ -89,6 +89,7 @@ typedef struct{
 	NRF_CRC_WIDTH	CRC_WIDTH;
 	NRF_ADDR_WIDTH	ADDR_WIDTH;
 	NRF_TXRX_STATE	STATE;
+	uint8_t			RX_FLAG;
 
 	uint8_t*		RX_BUFFER;
 	uint8_t*		TX_BUFFER;
@@ -121,7 +122,7 @@ void NRF_IRQ_Handler(NRF24L01* dev);
 
 /* Data Sending / Receiving FXs */
 NRF_RESULT NRF_SendPacket(NRF24L01* dev,uint8_t* data);
-
+NRF_RESULT NRF_ReceivePacket(NRF24L01* dev,uint8_t* data);
 
 
 

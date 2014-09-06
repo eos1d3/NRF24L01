@@ -42,6 +42,9 @@ NRF_RESULT NRF_SetupGPIO(NRF24L01* dev) {
 	HAL_NVIC_EnableIRQ(dev->NRF_IRQn);
 	// end IRQ pin
 
+	NRF_CS_DISABLE(dev);
+	NRF_CE_DISABLE(dev);
+
 	return NRF_OK;
 }
 
@@ -49,29 +52,27 @@ NRF_RESULT NRF_Init(NRF24L01* dev) {
 
 	NRF_SetupGPIO(dev);
 
-	NRF_CS_DISABLE(dev);
-	NRF_CS_DISABLE(dev);
-	NRF_CS_DISABLE(dev);
-	NRF_CS_DISABLE(dev);
-
-	uint8_t reg = 0;
-	uint8_t data = 0;
-	uint8_t rx = 0;
-
-	NRF_CE_DISABLE(dev);
-
 	NRF_PowerUp(dev, 1);
+
+	uint8_t config=0;
+
+	while((config&2)==0){	// wait for powerup
+		NRF_ReadRegister(dev,NRF_CONFIG,&config);
+	}
+
 	NRF_SetRXPayloadWidth_P0(dev, dev->PayloadLength);
 	NRF_SetRXAddress_P0(dev, dev->RX_ADDRESS);
-	NRF_SetTXAddress(dev,dev->TX_ADDRESS);
+	NRF_SetTXAddress(dev, dev->TX_ADDRESS);
 	NRF_EnableRXDataReadyIRQ(dev, 1);
+	NRF_EnableTXDataSentIRQ(dev,1);
+	NRF_EnableMaxRetransmitIRQ(dev,1);
 	NRF_EnableCRC(dev, 1);
 	NRF_SetCRCWidth(dev, dev->CRC_WIDTH);
 	NRF_SetAddressWidth(dev, dev->ADDR_WIDTH);
 	NRF_SetRFChannel(dev, dev->RF_CHANNEL);
 	NRF_SetDataRate(dev, dev->DATA_RATE);
-	NRF_SetRetransmittionCount(dev,dev->RetransmitCount);
-	NRF_SetRetransmittionDelay(dev,dev->RetransmitDelay);
+	NRF_SetRetransmittionCount(dev, dev->RetransmitCount);
+	NRF_SetRetransmittionDelay(dev, dev->RetransmitDelay);
 
 	NRF_EnableRXPipe(dev, 0);
 	NRF_EnableAutoAcknowledgement(dev, 0);
@@ -80,21 +81,19 @@ NRF_RESULT NRF_Init(NRF24L01* dev) {
 
 	NRF_RXTXControl(dev, NRF_STATE_RX);
 
-	NRF_CE_ENABLE(dev);
-
 	return NRF_OK;
 }
 
 NRF_RESULT NRF_SendCommand(NRF24L01* dev, uint8_t cmd, uint8_t* tx, uint8_t* rx,
 		uint8_t len) {
 	uint8_t myTX[len + 1];
-	uint8_t myRX[len+1];
+	uint8_t myRX[len + 1];
 	myTX[0] = cmd;
 
 	int i = 0;
 	for (i = 0; i < len; i++) {
 		myTX[1 + i] = tx[i];
-		myRX[i]=0;
+		myRX[i] = 0;
 	}
 
 	NRF_CS_ENABLE(dev);
@@ -103,8 +102,8 @@ NRF_RESULT NRF_SendCommand(NRF24L01* dev, uint8_t cmd, uint8_t* tx, uint8_t* rx,
 		return NRF_ERROR;
 	}
 
-	for(i=0;i<len;i++){
-		rx[i]=myRX[1+i];
+	for (i = 0; i < len; i++) {
+		rx[i] = myRX[1 + i];
 	}
 
 	NRF_CS_DISABLE(dev);
@@ -114,37 +113,40 @@ NRF_RESULT NRF_SendCommand(NRF24L01* dev, uint8_t cmd, uint8_t* tx, uint8_t* rx,
 
 void NRF_IRQ_Handler(NRF24L01* dev) {
 	uint8_t status = 0;
-	if(NRF_ReadRegister(dev, NRF_STATUS, &status)!=NRF_OK){
+	if (NRF_ReadRegister(dev, NRF_STATUS, &status) != NRF_OK) {
 		return;
 	}
 
 	if ((status & (1 << 6))) {	// RX FIFO Interrupt
-		uint8_t fifo_status=0;
+		uint8_t fifo_status = 0;
 
-		NRF_ReadRXPayload(dev,dev->RX_BUFFER);
-		status |= 1 << 6;
-		NRF_WriteRegister(dev, NRF_STATUS, &status);
+		if (dev->RX_FLAG == 0) {
+			NRF_ReadRXPayload(dev, dev->RX_BUFFER);
+			status |= 1 << 6;
+			NRF_WriteRegister(dev, NRF_STATUS, &status);
 
-		NRF_ReadRegister(dev,NRF_FIFO_STATUS,&fifo_status);
+			NRF_ReadRegister(dev, NRF_FIFO_STATUS, &fifo_status);
 
-		while(fifo_status&1==0){	//data in RX FIFO
-			NRF_ReadRXPayload(dev,dev->RX_BUFFER);
-			NRF_ReadRegister(dev,NRF_FIFO_STATUS,&fifo_status);
+			while ((fifo_status & 1) == 0) {	//data in RX FIFO
+				NRF_ReadRXPayload(dev, dev->RX_BUFFER);
+				NRF_ReadRegister(dev, NRF_FIFO_STATUS, &fifo_status);
+			}
+			dev->RX_FLAG=1;
 		}
 
 	}
 	if ((status & (1 << 5))) {	// TX Data Sent Interrupt
 		status |= 1 << 5;	// clear the interrupt flag
 		NRF_CE_DISABLE(dev);
-		NRF_RXTXControl(dev,NRF_STATE_RX);
-		dev->STATE=NRF_STATE_RX;
+		NRF_RXTXControl(dev, NRF_STATE_RX);
+		dev->STATE = NRF_STATE_RX;
 		NRF_CE_ENABLE(dev);
 	}
 	if ((status & (1 << 4))) {	// MaxRetransmits reached
 		status |= 1 << 4;
 		NRF_CE_DISABLE(dev);
-		NRF_RXTXControl(dev,NRF_STATE_RX);
-		dev->STATE=NRF_STATE_RX;
+		NRF_RXTXControl(dev, NRF_STATE_RX);
+		dev->STATE = NRF_STATE_RX;
 		NRF_CE_ENABLE(dev);
 	}
 
@@ -212,15 +214,15 @@ NRF_RESULT NRF_SetDataRate(NRF24L01* dev, NRF_DATA_RATE rate) {
 		return NRF_ERROR;
 	}
 	if (rate & 1) {	// low bit set
-		rate |= 1 << 5;
+		reg |= 1 << 5;
 	} else {	// low bit clear
-		rate &= ~(1 << 5);
+		reg &= ~(1 << 5);
 	}
 
 	if (rate & 2) {	// high bit set
-		rate |= 1 << 3;
+		reg |= 1 << 3;
 	} else {	// high bit clear
-		rate &= ~(1 << 3);
+		reg &= ~(1 << 3);
 	}
 	if (NRF_WriteRegister(dev, NRF_RF_SETUP, &reg) != NRF_OK) {
 		return NRF_ERROR;
@@ -441,7 +443,7 @@ NRF_RESULT NRF_EnableRXDataReadyIRQ(NRF24L01* dev, uint8_t activate) {
 		return NRF_ERROR;
 	}
 
-	if (activate) {
+	if (!activate) {
 		reg |= 1 << 6;
 	} else {
 		reg &= ~(1 << 6);
@@ -458,7 +460,7 @@ NRF_RESULT NRF_EnableTXDataSentIRQ(NRF24L01* dev, uint8_t activate) {
 	if (NRF_ReadRegister(dev, NRF_CONFIG, &reg) != NRF_OK) {
 		return NRF_ERROR;
 	}
-	if (activate) {
+	if (!activate) {
 		reg |= 1 << 5;
 	} else {
 		reg &= ~(1 << 5);
@@ -474,7 +476,7 @@ NRF_RESULT NRF_EnableMaxRetransmitIRQ(NRF24L01* dev, uint8_t activate) {
 	if (NRF_ReadRegister(dev, NRF_CONFIG, &reg) != NRF_OK) {
 		return NRF_ERROR;
 	}
-	if (activate) {
+	if (!activate) {
 		reg |= 1 << 4;
 	} else {
 		reg &= ~(1 << 4);
@@ -511,12 +513,31 @@ NRF_RESULT NRF_SetRXPayloadWidth_P0(NRF24L01* dev, uint8_t width) {
 	return NRF_OK;
 }
 
-NRF_RESULT NRF_SendPacket(NRF24L01* dev,uint8_t* data){
+NRF_RESULT NRF_SendPacket(NRF24L01* dev, uint8_t* data) {
 	NRF_CE_DISABLE(dev);
-	while(dev->STATE==NRF_STATE_TX);	//waiting for the previous tx
-	NRF_RXTXControl(dev,NRF_STATE_TX);
-	NRF_WriteTXPayload(dev,data);
+	while (dev->STATE == NRF_STATE_TX)
+		;	//waiting for the previous tx
+	NRF_RXTXControl(dev, NRF_STATE_TX);
+	NRF_WriteTXPayload(dev, data);
 	NRF_CE_ENABLE(dev);
+	return NRF_OK;
+}
+
+NRF_RESULT NRF_ReceivePacket(NRF24L01* dev, uint8_t* data) {
+	NRF_CE_DISABLE(dev);
+	NRF_RXTXControl(dev, NRF_STATE_RX);
+	NRF_CE_ENABLE(dev);
+
+	while (dev->RX_FLAG == 0)
+		;	// wait for reception
+
+	int i = 0;
+	for (i = 0; i < dev->PayloadLength; i++) {
+		data[i] = dev->RX_BUFFER[i];
+	}
+
+	dev->RX_FLAG = 0;
+
 	return NRF_OK;
 }
 
