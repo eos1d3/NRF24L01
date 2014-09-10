@@ -89,7 +89,7 @@ typedef struct{
 	NRF_CRC_WIDTH	CRC_WIDTH;
 	NRF_ADDR_WIDTH	ADDR_WIDTH;
 	NRF_TXRX_STATE	STATE;
-	uint8_t			RX_FLAG;
+	uint8_t			BUSY_FLAG;
 
 	uint8_t*		RX_BUFFER;
 	uint8_t*		TX_BUFFER;
@@ -120,12 +120,13 @@ NRF_RESULT NRF_Init(NRF24L01* dev);
 /* EXTI Interrupt Handler */
 void NRF_IRQ_Handler(NRF24L01* dev);
 
-/* Data Sending / Receiving FXs */
+/* Blocking Data Sending / Receiving FXs */
 NRF_RESULT NRF_SendPacket(NRF24L01* dev,uint8_t* data);
 NRF_RESULT NRF_ReceivePacket(NRF24L01* dev,uint8_t* data);
 
-
-
+/* Non-Blocking Data Sending / Receiving FXs */
+NRF_RESULT NRF_PushPacket(NRF24L01* dev,uint8_t* data);
+NRF_RESULT NRF_PullPacket(NRF24L01* dev,uint8_t* data);
 
 /* LOW LEVEL STUFF (you don't have to look in here...)*/
 NRF_RESULT NRF_SendCommand(NRF24L01* dev, uint8_t cmd, uint8_t* tx,uint8_t* rx,uint8_t len);

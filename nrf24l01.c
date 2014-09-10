@@ -81,6 +81,8 @@ NRF_RESULT NRF_Init(NRF24L01* dev) {
 
 	NRF_RXTXControl(dev, NRF_STATE_RX);
 
+	NRF_FlushRX(dev);
+
 	return NRF_OK;
 }
 
@@ -119,21 +121,17 @@ void NRF_IRQ_Handler(NRF24L01* dev) {
 
 	if ((status & (1 << 6))) {	// RX FIFO Interrupt
 		uint8_t fifo_status = 0;
-
-		if (dev->RX_FLAG == 0) {
+		NRF_CE_DISABLE(dev);
+		NRF_WriteRegister(dev, NRF_STATUS, &status);
+		NRF_ReadRegister(dev, NRF_FIFO_STATUS, &fifo_status);
+		if (dev->BUSY_FLAG == 1 && (fifo_status & 1) == 0) {
 			NRF_ReadRXPayload(dev, dev->RX_BUFFER);
 			status |= 1 << 6;
 			NRF_WriteRegister(dev, NRF_STATUS, &status);
-
-			NRF_ReadRegister(dev, NRF_FIFO_STATUS, &fifo_status);
-
-			while ((fifo_status & 1) == 0) {	//data in RX FIFO
-				NRF_ReadRXPayload(dev, dev->RX_BUFFER);
-				NRF_ReadRegister(dev, NRF_FIFO_STATUS, &fifo_status);
-			}
-			dev->RX_FLAG=1;
+			//NRF_FlushRX(dev);
+			dev->BUSY_FLAG=0;
 		}
-
+		NRF_CE_ENABLE(dev);
 	}
 	if ((status & (1 << 5))) {	// TX Data Sent Interrupt
 		status |= 1 << 5;	// clear the interrupt flag
@@ -141,17 +139,24 @@ void NRF_IRQ_Handler(NRF24L01* dev) {
 		NRF_RXTXControl(dev, NRF_STATE_RX);
 		dev->STATE = NRF_STATE_RX;
 		NRF_CE_ENABLE(dev);
+		NRF_WriteRegister(dev, NRF_STATUS, &status);
+		dev->BUSY_FLAG=0;
 	}
 	if ((status & (1 << 4))) {	// MaxRetransmits reached
 		status |= 1 << 4;
+
+		NRF_FlushTX(dev);
+		NRF_PowerUp(dev,0);	// power down
+		NRF_PowerUp(dev,1);	// power up
+
 		NRF_CE_DISABLE(dev);
 		NRF_RXTXControl(dev, NRF_STATE_RX);
 		dev->STATE = NRF_STATE_RX;
 		NRF_CE_ENABLE(dev);
+
+		NRF_WriteRegister(dev, NRF_STATUS, &status);
+		dev->BUSY_FLAG=0;
 	}
-
-	NRF_WriteRegister(dev, NRF_STATUS, &status);
-
 }
 
 NRF_RESULT NRF_ReadRegister(NRF24L01* dev, uint8_t reg, uint8_t* data) {
@@ -514,29 +519,58 @@ NRF_RESULT NRF_SetRXPayloadWidth_P0(NRF24L01* dev, uint8_t width) {
 }
 
 NRF_RESULT NRF_SendPacket(NRF24L01* dev, uint8_t* data) {
+
+	dev->BUSY_FLAG = 1;
+
 	NRF_CE_DISABLE(dev);
-	while (dev->STATE == NRF_STATE_TX)
-		;	//waiting for the previous tx
 	NRF_RXTXControl(dev, NRF_STATE_TX);
 	NRF_WriteTXPayload(dev, data);
 	NRF_CE_ENABLE(dev);
+
+	while (dev->BUSY_FLAG == 1);	// wait for end of transmittion
+
 	return NRF_OK;
 }
 
 NRF_RESULT NRF_ReceivePacket(NRF24L01* dev, uint8_t* data) {
+
+	dev->BUSY_FLAG = 1;
+
 	NRF_CE_DISABLE(dev);
 	NRF_RXTXControl(dev, NRF_STATE_RX);
 	NRF_CE_ENABLE(dev);
 
-	while (dev->RX_FLAG == 0)
-		;	// wait for reception
+	while (dev->BUSY_FLAG == 1);	// wait for reception
 
 	int i = 0;
 	for (i = 0; i < dev->PayloadLength; i++) {
 		data[i] = dev->RX_BUFFER[i];
 	}
 
-	dev->RX_FLAG = 0;
+	return NRF_OK;
+}
+
+NRF_RESULT NRF_PushPacket(NRF24L01* dev, uint8_t* data) {
+
+	if(dev->BUSY_FLAG==1){
+		NRF_FlushTX(dev);
+	}else{
+		dev->BUSY_FLAG = 1;
+	}
+	NRF_CE_DISABLE(dev);
+	NRF_RXTXControl(dev, NRF_STATE_TX);
+	NRF_WriteTXPayload(dev, data);
+	NRF_CE_ENABLE(dev);
+
+	return NRF_OK;
+}
+
+NRF_RESULT NRF_PullPacket(NRF24L01* dev, uint8_t* data) {
+
+	int i = 0;
+	for (i = 0; i < dev->PayloadLength; i++) {
+		data[i] = dev->RX_BUFFER[i];
+	}
 
 	return NRF_OK;
 }
